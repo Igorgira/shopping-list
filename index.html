@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="uk" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Список покупок — Telegram Mini App</title>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        tg: {
+                            bg: 'var(--tg-theme-bg-color, #f8fafc)',
+                            secondaryBg: 'var(--tg-theme-secondary-bg-color, #ffffff)',
+                            text: 'var(--tg-theme-text-color, #0f172a)',
+                            hint: 'var(--tg-theme-hint-color, #64748b)',
+                            link: 'var(--tg-theme-link-color, #2563eb)',
+                            button: 'var(--tg-theme-button-color, #2563eb)',
+                            buttonText: 'var(--tg-theme-button-text-color, #ffffff)',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --tg-theme-bg-color: #f1f5f9;
+            --tg-theme-secondary-bg-color: #ffffff;
+            --tg-theme-text-color: #0f172a;
+            --tg-theme-hint-color: #64748b;
+            --tg-theme-link-color: #2563eb;
+            --tg-theme-button-color: #2563eb;
+            --tg-theme-button-text-color: #ffffff;
+        }
+
+        html.dark {
+            --tg-theme-bg-color: #0f172a;
+            --tg-theme-secondary-bg-color: #1e293b;
+            --tg-theme-text-color: #f8fafc;
+            --tg-theme-hint-color: #94a3b8;
+            --tg-theme-link-color: #38bdf8;
+            --tg-theme-button-color: #3b82f6;
+            --tg-theme-button-text-color: #ffffff;
+        }
+
+        body {
+            background-color: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+        }
+
+        /* Приховування скролбару для чіпсів категорій */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Плавна анімація закреслення */
+        .strike-anim {
+            position: relative;
+            transition: color 0.2s ease;
+        }
+        .strike-anim::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 0;
+            height: 1.5px;
+            background-color: currentColor;
+            transition: width 0.25s ease-in-out;
+        }
+        .strike-active::after {
+            width: 100%;
+        }
+
+        /* Анімація появи елементів */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .item-enter {
+            animation: slideIn 0.2s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-32 select-none transition-colors duration-200">
+
+    <!-- Контейнер застосунку (центрований для десктопу, повний для мобільного) -->
+    <div class="max-w-md mx-auto min-h-screen flex flex-col">
+
+        <!-- Шапка з прогресом та налаштуваннями -->
+        <header class="sticky top-0 z-20 backdrop-blur-md bg-white/85 dark:bg-slate-900/85 border-b border-slate-200/70 dark:border-slate-800 px-4 pt-3 pb-3 transition-colors">
+            <div class="flex items-center justify-between mb-2.5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shadow-blue-500/30">
+                        <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold leading-tight tracking-tight">Список покупок</h1>
+                        <p id="env-badge" class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Telegram Mini App</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                    <!-- Кнопка швидких наборів -->
+                    <button onclick="openPresetsModal()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 active:scale-95 transition" title="Швидкі набори">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                        <span>Набори</span>
+                    </button>
+
+                    <!-- Перемикач групування -->
+                    <button id="group-toggle-btn" onclick="toggleGrouping()" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition" title="Групувати за категоріями">
+                        <i data-lucide="layers" class="w-4 h-4"></i>
+                    </button>
+
+                    <!-- Перемикач теми -->
+                    <button onclick="toggleTheme()" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition" title="Змінити тему">
+                        <i id="theme-icon" data-lucide="moon" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Прогрес-бар покупок -->
+            <div class="bg-slate-100 dark:bg-slate-800/90 rounded-2xl p-2.5">
+                <div class="flex justify-between items-center text-xs font-medium mb-1.5">
+                    <span id="progress-text" class="text-slate-600 dark:text-slate-300">Куплено 0 з 0</span>
+                    <span id="progress-percent" class=" font-bold text-blue-600 dark:text-blue-400">0%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Основний контент -->
+        <main class="flex-1 px-4 pt-3 space-y-3">
+
+            <!-- Панель швидкого додавання товару -->
+            <section class="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-slate-200/60 dark:border-slate-700/60">
+                <form id="add-item-form" onsubmit="handleAddItem(event)" class="space-y-2.5">
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <input 
+                                type="text" 
+                                id="item-name-input" 
+                                placeholder="Що потрібно купити?.." 
+                                required
+                                autocomplete="off"
+                                class="w-full pl-3.5 pr-8 py-2.5 text-sm rounded-xl bg-slate-100 dark:bg-slate-900/90 border border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition"
+                            >
+                            <button type="button" id="clear-input-btn" onclick="clearInput()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                <i data-lucide="x-circle" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <button 
+                            type="submit" 
+                            class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-semibold text-sm rounded-xl shadow-sm shadow-blue-500/25 flex items-center justify-center gap-1 transition shrink-0"
+                        >
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            <span>Додати</span>
+                        </button>
+                    </div>
+
+                    <!-- Додаткові параметри: Кількість, Одиниця, Категорія -->
+                    <div class="flex items-center gap-2">
+                        <!-- Кількість -->
+                        <div class="flex items-center bg-slate-100 dark:bg-slate-900/90 rounded-xl p-0.5 border border-slate-200/50 dark:border-slate-700/50">
+                            <button type="button" onclick="adjustFormQty(-1)" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-white dark:hover:bg-slate-800 active:scale-90 transition">
+                                <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <input 
+                                type="number" 
+                                id="item-qty-input" 
+                                value="1" 
+                                min="0.1" 
+                                step="any"
+                                class="w-10 text-center text-xs font-semibold bg-transparent focus:outline-none"
+                            >
+                            <button type="button" onclick="adjustFormQty(1)" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-white dark:hover:bg-slate-800 active:scale-90 transition">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+
+                        <!-- Одиниця виміру -->
+                        <select 
+                            id="item-unit-input" 
+                            class="py-1.5 px-2 text-xs font-medium rounded-xl bg-slate-100 dark:bg-slate-900/90 border border-slate-200/50 dark:border-slate-700/50 focus:outline-none"
+                        >
+                            <option value="шт">шт</option>
+                            <option value="кг">кг</option>
+                            <option value="г">г</option>
+                            <option value="л">л</option>
+                            <option value="уп">уп</option>
+                        </select>
+
+                        <!-- Вибір категорії -->
+                        <select 
+                            id="item-category-input" 
+                            class="flex-1 py-1.5 px-2.5 text-xs font-medium rounded-xl bg-slate-100 dark:bg-slate-900/90 border border-slate-200/50 dark:border-slate-700/50 focus:outline-none truncate"
+                        >
+                            <option value="groceries">🥦 Продукти</option>
+                            <option value="cleaning">🧼 Побутова хімія та дім</option>
+                            <option value="hardware">🛠️ Господарські товари</option>
+                            <option value="pets">🐾 Зоотовари</option>
+                            <option value="other">📦 Інше</option>
+                        </select>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Фільтри за статусом (Усі / Активні / Куплено) -->
+            <section class="space-y-2">
+                <div class="grid grid-cols-3 gap-1 bg-slate-200/70 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+                    <button onclick="setStatusFilter('all')" id="tab-all" class="py-1.5 rounded-lg transition text-center">
+                        Усі <span id="count-all" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-slate-300/70 dark:bg-slate-700">0</span>
+                    </button>
+                    <button onclick="setStatusFilter('active')" id="tab-active" class="py-1.5 rounded-lg transition text-center">
+                        Активні <span id="count-active" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-slate-300/70 dark:bg-slate-700">0</span>
+                    </button>
+                    <button onclick="setStatusFilter('bought')" id="tab-bought" class="py-1.5 rounded-lg transition text-center">
+                        Куплено <span id="count-bought" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-slate-300/70 dark:bg-slate-700">0</span>
+                    </button>
+                </div>
+
+                <!-- Чіпси фільтрації за категоріями -->
+                <div id="category-chips" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                    <!-- Генерується динамічно в JS -->
+                </div>
+            </section>
+
+            <!-- Список покупок -->
+            <section id="shopping-list-container" class="space-y-3 pb-4">
+                <!-- Елементи списку рендеряться тут -->
+            </section>
+
+        </main>
+
+        <!-- Нижня панель дій -->
+        <footer class="fixed bottom-0 left-0 right-0 z-20 backdrop-blur-md bg-white/90 dark:bg-slate-900/90 border-t border-slate-200/80 dark:border-slate-800 px-4 py-3">
+            <div class="max-w-md mx-auto flex items-center gap-2">
+                <button 
+                    onclick="clearBoughtItems()" 
+                    id="clear-bought-btn"
+                    class="flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 active:scale-95 transition flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    <span>Очистити куплені</span>
+                </button>
+
+                <button 
+                    onclick="shareShoppingList()" 
+                    class="flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm shadow-blue-500/25 transition flex items-center justify-center gap-1.5"
+                >
+                    <i data-lucide="share-2" class="w-4 h-4"></i>
+                    <span>Поділитися списком</span>
+                </button>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Модальне вікно "Швидкі набори" -->
+    <div id="presets-modal" class="fixed inset-0 z-40 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs p-0 sm:p-4 transition-opacity">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 shadow-xl border-t sm:border border-slate-200 dark:border-slate-700 max-h-[82vh] flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">⚡</span>
+                    <h2 class="text-base font-bold">Швидкі набори та товари</h2>
+                </div>
+                <button onclick="closePresetsModal()" class="p-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Натисніть на набір або окремий популярний товар, щоб миттєво додати його у свій список:</p>
+
+            <div class="overflow-y-auto space-y-4 pr-1 flex-1">
+                <!-- Готові набори -->
+                <div>
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Готові кошики</h3>
+                    <div class="grid grid-cols-1 gap-2">
+                        <button onclick="addPresetPack('borscht')" class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 hover:bg-blue-50 dark:hover:bg-slate-700/60 border border-slate-200/60 dark:border-slate-700 text-left transition active:scale-[0.99]">
+                            <div>
+                                <div class="font-semibold text-sm">🍲 На український борщ</div>
+                                <div class="text-[11px] text-slate-500 dark:text-slate-400">Буряк, капуста, картопля, сметана, м'ясо, томатна паста</div>
+                            </div>
+                            <i data-lucide="plus-circle" class="w-5 h-5 text-blue-600 shrink-0 ml-2"></i>
+                        </button>
+
+                        <button onclick="addPresetPack('breakfast')" class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 hover:bg-blue-50 dark:hover:bg-slate-700/60 border border-slate-200/60 dark:border-slate-700 text-left transition active:scale-[0.99]">
+                            <div>
+                                <div class="font-semibold text-sm">🥞 Базовий сніданок</div>
+                                <div class="text-[11px] text-slate-500 dark:text-slate-400">Яйця, молоко, хліб тостовий, масло, сир твердий, кава</div>
+                            </div>
+                            <i data-lucide="plus-circle" class="w-5 h-5 text-blue-600 shrink-0 ml-2"></i>
+                        </button>
+
+                        <button onclick="addPresetPack('cleaning')" class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 hover:bg-blue-50 dark:hover:bg-slate-700/60 border border-slate-200/60 dark:border-slate-700 text-left transition active:scale-[0.99]">
+                            <div>
+                                <div class="font-semibold text-sm">✨ Чиста оселя</div>
+                                <div class="text-[11px] text-slate-500 dark:text-slate-400">Губки для посуду, пакети для сміття, паперові рушники, мило</div>
+                            </div>
+                            <i data-lucide="plus-circle" class="w-5 h-5 text-blue-600 shrink-0 ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Популярні поштучні товари -->
+                <div>
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Часто купують (1 дотик)</h3>
+                    <div class="flex flex-wrap gap-1.5" id="quick-single-items">
+                        <!-- Заповнюється в JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальне вікно редагування товару -->
+    <div id="edit-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl p-5 shadow-xl border border-slate-200 dark:border-slate-700">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-bold">Редагувати позицію</h3>
+                <button onclick="closeEditModal()" class="p-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <form onsubmit="saveEditedItem(event)" class="space-y-3">
+                <input type="hidden" id="edit-item-id">
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Назва товару</label>
+                    <input type="text" id="edit-item-name" required class="w-full px-3 py-2 text-sm rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Кількість</label>
+                        <input type="number" id="edit-item-qty" step="any" min="0.1" required class="w-full px-3 py-2 text-sm rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Одиниця</label>
+                        <select id="edit-item-unit" class="w-full px-3 py-2 text-sm rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none">
+                            <option value="шт">шт</option>
+                            <option value="кг">кг</option>
+                            <option value="г">г</option>
+                            <option value="л">л</option>
+                            <option value="уп">уп</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Категорія</label>
+                    <select id="edit-item-category" class="w-full px-3 py-2 text-sm rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none">
+                        <option value="groceries">🥦 Продукти</option>
+                        <option value="cleaning">🧼 Побутова хімія та дім</option>
+                        <option value="hardware">🛠️ Господарські товари</option>
+                        <option value="pets">🐾 Зоотовари</option>
+                        <option value="other">📦 Інше</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeEditModal()" class="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">Скасувати</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 text-white">Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Тост-сповіщення (замість alert) -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-2">
+        <div class="bg-slate-900/95 dark:bg-white/95 text-white dark:text-slate-900 px-4 py-2 rounded-full shadow-lg text-xs font-semibold flex items-center gap-2">
+            <span id="toast-icon">✅</span>
+            <span id="toast-message">Повідомлення</span>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // КОНФІГУРАЦІЯ КАТЕГОРІЙ ТА ДАНИХ
+        // ==========================================
+        const CATEGORIES = {
+            groceries: { id: 'groceries', name: 'Продукти', icon: '🥦', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
+            cleaning:  { id: 'cleaning',  name: 'Побутова хімія та дім', icon: '🧼', color: 'bg-sky-500/10 text-sky-600 dark:text-sky-400' },
+            hardware:  { id: 'hardware',  name: 'Господарські товари', icon: '🛠️', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
+            pets:      { id: 'pets',      name: 'Зоотовари', icon: '🐾', color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400' },
+            other:     { id: 'other',     name: 'Інше', icon: '📦', color: 'bg-slate-500/10 text-slate-600 dark:text-slate-400' }
+        };
+
+        const DEFAULT_ITEMS = [
+            { id: '1', name: 'Молоко фермерське 2.5%', qty: 1, unit: 'л', category: 'groceries', bought: false },
+            { id: '2', name: 'Хліб житній свіжий', qty: 1, unit: 'шт', category: 'groceries', bought: false },
+            { id: '3', name: 'Авокадо Хасс', qty: 2, unit: 'шт', category: 'groceries', bought: true },
+            { id: '4', name: 'Гель для миття посуду', qty: 1, unit: 'шт', category: 'cleaning', bought: false },
+            { id: '5', name: 'Вологий корм для кота', qty: 4, unit: 'уп', category: 'pets', bought: false }
+        ];
+
+        const QUICK_SINGLES = [
+            { name: 'Яйця курячі', qty: 1, unit: 'уп', category: 'groceries', emoji: '🥚' },
+            { name: 'Банани', qty: 1, unit: 'кг', category: 'groceries', emoji: '🍌' },
+            { name: 'Картопля', qty: 2, unit: 'кг', category: 'groceries', emoji: '🥔' },
+            { name: 'Масло вершкове', qty: 1, unit: 'уп', category: 'groceries', emoji: '🧈' },
+            { name: 'Кава мелена', qty: 1, unit: 'уп', category: 'groceries', emoji: '☕' },
+            { name: 'Туалетний папір', qty: 1, unit: 'уп', category: 'cleaning', emoji: '🧻' },
+            { name: 'Зубна паста', qty: 1, unit: 'шт', category: 'cleaning', emoji: '🪥' },
+            { name: 'Батарейки АА', qty: 1, unit: 'уп', category: 'hardware', emoji: '🔋' }
+        ];
+
+        const PRESET_PACKS = {
+            borscht: [
+                { name: 'Буряк червоний', qty: 0.5, unit: 'кг', category: 'groceries' },
+                { name: 'Капуста білокачанна', qty: 1, unit: 'шт', category: 'groceries' },
+                { name: 'Картопля', qty: 1, unit: 'кг', category: 'groceries' },
+                { name: 'Сметана 20%', qty: 1, unit: 'уп', category: 'groceries' },
+                { name: 'Томатна паста', qty: 1, unit: 'уп', category: 'groceries' }
+            ],
+            breakfast: [
+                { name: 'Яйця курячі', qty: 1, unit: 'уп', category: 'groceries' },
+                { name: 'Молоко', qty: 1, unit: 'л', category: 'groceries' },
+                { name: 'Хліб тостовий', qty: 1, unit: 'уп', category: 'groceries' },
+                { name: 'Сир твердий', qty: 200, unit: 'г', category: 'groceries' }
+            ],
+            cleaning: [
+                { name: 'Губки кухонні', qty: 1, unit: 'уп', category: 'cleaning' },
+                { name: 'Пакети для сміття 60л', qty: 1, unit: 'уп', category: 'cleaning' },
+                { name: 'Паперові рушники', qty: 1, unit: 'уп', category: 'cleaning' },
+                { name: 'Рідке мило', qty: 1, unit: 'шт', category: 'cleaning' }
+            ]
+        };
+
+        // ==========================================
+        // СТАН ЗАСТОСУНКУ
+        // ==========================================
+        const STORAGE_KEY = 'tma_shopping_list_ua_v1';
+        const SETTINGS_KEY = 'tma_shopping_settings_ua_v1';
+
+        let items = [];
+        let statusFilter = 'all'; // 'all' | 'active' | 'bought'
+        let categoryFilter = 'all'; // 'all' | categoryId
+        let isGroupedByCategory = true;
+        let isDarkMode = false;
+
+        // Посилання на Telegram WebApp
+        const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+
+        // ==========================================
+        // ІНІЦІАЛІЗАЦІЯ
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            initTelegramSDK();
+            loadFromStorage();
+            renderQuickSingleButtons();
+            renderApp();
+
+            // Слухач для кнопки очищення поля вводу
+            const nameInput = document.getElementById('item-name-input');
+            const clearBtn = document.getElementById('clear-input-btn');
+            nameInput.addEventListener('input', () => {
+                clearBtn.classList.toggle('hidden', nameInput.value.trim().length === 0);
+                autoGuessCategory(nameInput.value);
+            });
+        });
+
+        function initTelegramSDK() {
+            const badge = document.getElementById('env-badge');
+            if (tg && tg.initDataUnsafe && Object.keys(tg.initDataUnsafe).length > 0) {
+                tg.ready();
+                tg.expand();
+                badge.textContent = tg.initDataUnsafe.user 
+                    ? `Вітаємо, ${tg.initDataUnsafe.user.first_name}!` 
+                    : 'Telegram WebApp активний';
+
+                if (tg.colorScheme === 'dark') {
+                    setTheme(true);
+                }
+                tg.onEvent('themeChanged', () => {
+                    setTheme(tg.colorScheme === 'dark');
+                });
+            } else {
+                badge.textContent = 'Режим перегляду ( сумісний з Telegram )';
+            }
+        }
+
+        // Тактильний відгук (Haptic Feedback)
+        function triggerHaptic(type = 'light') {
+            try {
+                if (tg && tg.HapticFeedback) {
+                    if (type === 'success' || type === 'warning' || type === 'error') {
+                        tg.HapticFeedback.notificationOccurred(type);
+                    } else {
+                        tg.HapticFeedback.impactOccurred(type);
+                    }
+                } else if (navigator.vibrate) {
+                    navigator.vibrate(12);
+                }
+            } catch (e) {
+                // Ігноруємо помилки у звичайному браузері
+            }
+        }
+
+        // ==========================================
+        // ЗБЕРЕЖЕННЯ ДАНИХ (LocalStorage)
+        // ==========================================
+        function loadFromStorage() {
+            try {
+                const rawItems = localStorage.getItem(STORAGE_KEY);
+                if (rawItems) {
+                    items = JSON.parse(rawItems);
+                } else {
+                    items = [...DEFAULT_ITEMS];
+                    saveToStorage();
+                }
+
+                const rawSettings = localStorage.getItem(SETTINGS_KEY);
+                if (rawSettings) {
+                    const settings = JSON.parse(rawSettings);
+                    isGroupedByCategory = settings.isGroupedByCategory ?? true;
+                    if (typeof settings.isDarkMode === 'boolean') {
+                        setTheme(settings.isDarkMode);
+                    }
+                }
+            } catch (err) {
+                items = [...DEFAULT_ITEMS];
+            }
+        }
+
+        function saveToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+                    isGroupedByCategory,
+                    isDarkMode
+                }));
+            } catch (err) {
+                console.error('Помилка збереження у LocalStorage:', err);
+            }
+        }
+
+        // Автоматичне підказування категорії за назвою
+        function autoGuessCategory(text) {
+            const val = text.toLowerCase();
+            const catSelect = document.getElementById('item-category-input');
+            if (/(корм|кіт|кота|собак|наповнювач)/.test(val)) {
+                catSelect.value = 'pets';
+            } else if (/(мило|порошок|гель|шампунь|губк|серветк|папір|пакет|засіб)/.test(val)) {
+                catSelect.value = 'cleaning';
+            } else if (/(ламп|батарейк|цвях|скотч|інструмент|клей|рукавич)/.test(val)) {
+                catSelect.value = 'hardware';
+            } else if (/(хліб|молок|сир|м'яс|курк|яйц|овоч|фрукт|вод|кав|чай|масл|круп|макарон)/.test(val)) {
+                catSelect.value = 'groceries';
+            }
+        }
+
+        // ==========================================
+        // ОПЕРАЦІЇ З ТОВАРАМИ
+        // ==========================================
+        function handleAddItem(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('item-name-input');
+            const qtyInput = document.getElementById('item-qty-input');
+            const unitInput = document.getElementById('item-unit-input');
+            const categoryInput = document.getElementById('item-category-input');
+
+            const name = nameInput.value.trim();
+            if (!name) return;
+
+            const newItem = {
+                id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
+                name,
+                qty: parseFloat(qtyInput.value) || 1,
+                unit: unitInput.value,
+                category: categoryInput.value,
+                bought: false
+            };
+
+            items.unshift(newItem);
+            saveToStorage();
+            triggerHaptic('light');
+
+            // Скидання поля
+            nameInput.value = '';
+            qtyInput.value = '1';
+            document.getElementById('clear-input-btn').classList.add('hidden');
+            renderApp();
+            showToast(`Додано: ${name}`, '🛒');
+        }
+
+        function clearInput() {
+            const nameInput = document.getElementById('item-name-input');
+            nameInput.value = '';
+            document.getElementById('clear-input-btn').classList.add('hidden');
+            nameInput.focus();
+        }
+
+        function adjustFormQty(delta) {
+            const input = document.getElementById('item-qty-input');
+            let current = parseFloat(input.value) || 1;
+            let next = Math.max(1, Math.round((current + delta) * 10) / 10);
+            input.value = next;
+            triggerHaptic('light');
+        }
+
+        function toggleItemBought(id) {
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+            item.bought = !item.bought;
+            saveToStorage();
+            triggerHaptic(item.bought ? 'success' : 'light');
+            renderApp();
+        }
+
+        function changeItemQty(id, delta, event) {
+            event.stopPropagation();
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+
+            const step = (item.unit === 'кг' || item.unit === 'л') && item.qty < 2 ? 0.5 : 1;
+            const nextQty = Math.round((item.qty + delta * step) * 100) / 100;
+
+            if (nextQty <= 0) {
+                deleteItem(id, event);
+                return;
+            }
+            item.qty = nextQty;
+            saveToStorage();
+            triggerHaptic('light');
+            renderApp();
+        }
+
+        function deleteItem(id, event) {
+            if (event) event.stopPropagation();
+            const idx = items.findIndex(i => i.id === id);
+            if (idx === -1) return;
+            const removed = items[idx];
+            items.splice(idx, 1);
+            saveToStorage();
+            triggerHaptic('warning');
+            renderApp();
+            showToast(`Видалено: ${removed.name}`, '🗑️');
+        }
+
+        function clearBoughtItems() {
+            const boughtCount = items.filter(i => i.bought).length;
+            if (boughtCount === 0) return;
+
+            items = items.filter(i => !i.bought);
+            saveToStorage();
+            triggerHaptic('warning');
+            renderApp();
+            showToast(`Очищено куплених позицій: ${boughtCount}`, '✨');
+        }
+
+        // Редагування товару у модальному вікні
+        function openEditModal(id, event) {
+            event.stopPropagation();
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('edit-item-id').value = item.id;
+            document.getElementById('edit-item-name').value = item.name;
+            document.getElementById('edit-item-qty').value = item.qty;
+            document.getElementById('edit-item-unit').value = item.unit;
+            document.getElementById('edit-item-category').value = item.category;
+
+            const modal = document.getElementById('edit-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('edit-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function saveEditedItem(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-item-id').value;
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+
+            item.name = document.getElementById('edit-item-name').value.trim();
+            item.qty = parseFloat(document.getElementById('edit-item-qty').value) || 1;
+            item.unit = document.getElementById('edit-item-unit').value;
+            item.category = document.getElementById('edit-item-category').value;
+
+            saveToStorage();
+            closeEditModal();
+            triggerHaptic('success');
+            renderApp();
+            showToast('Позицію оновлено', '✏️');
+        }
+
+        // ==========================================
+        // ШВИДКІ НАБОРИ ТА ПРЕСЕТИ
+        // ==========================================
+        function openPresetsModal() {
+            const modal = document.getElementById('presets-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            triggerHaptic('light');
+        }
+
+        function closePresetsModal() {
+            const modal = document.getElementById('presets-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function renderQuickSingleButtons() {
+            const container = document.getElementById('quick-single-items');
+            container.innerHTML = QUICK_SINGLES.map((item, idx) => `
+                <button 
+                    onclick="addQuickSingle(${idx})" 
+                    class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 dark:bg-slate-900 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 border border-slate-200/70 dark:border-slate-700 transition active:scale-95 flex items-center gap-1.5"
+                >
+                    <span>${item.emoji}</span>
+                    <span>${item.name}</span>
+                </button>
+            `).join('');
+        }
+
+        function addQuickSingle(index) {
+            const template = QUICK_SINGLES[index];
+            if (!template) return;
+
+            items.unshift({
+                id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
+                name: template.name,
+                qty: template.qty,
+                unit: template.unit,
+                category: template.category,
+                bought: false
+            });
+            saveToStorage();
+            triggerHaptic('light');
+            renderApp();
+            showToast(`Додано: ${template.name}`, template.emoji);
+        }
+
+        function addPresetPack(packKey) {
+            const pack = PRESET_PACKS[packKey];
+            if (!pack) return;
+
+            pack.forEach((tpl, i) => {
+                items.unshift({
+                    id: (Date.now() + i).toString() + Math.random().toString(36).substring(2, 5),
+                    name: tpl.name,
+                    qty: tpl.qty,
+                    unit: tpl.unit,
+                    category: tpl.category,
+                    bought: false
+                });
+            });
+
+            saveToStorage();
+            closePresetsModal();
+            triggerHaptic('success');
+            renderApp();
+            showToast(`Додано ${pack.length} позицій з набору!`, '⚡');
+        }
+
+        // ==========================================
+        // ФІЛЬТРИ, ГРУПУВАННЯ ТА ТЕМА
+        // ==========================================
+        function setStatusFilter(filter) {
+            statusFilter = filter;
+            triggerHaptic('light');
+            renderApp();
+        }
+
+        function setCategoryFilter(catId) {
+            categoryFilter = catId;
+            triggerHaptic('light');
+            renderApp();
+        }
+
+        function toggleGrouping() {
+            isGroupedByCategory = !isGroupedByCategory;
+            saveToStorage();
+            triggerHaptic('light');
+            renderApp();
+            showToast(isGroupedByCategory ? 'Групування за категоріями' : 'Єдиний плоский список', '🗂️');
+        }
+
+        function toggleTheme() {
+            setTheme(!isDarkMode);
+            saveToStorage();
+            triggerHaptic('light');
+        }
+
+        function setTheme(dark) {
+            isDarkMode = dark;
+            const root = document.documentElement;
+            if (dark) {
+                root.classList.add('dark');
+                root.classList.remove('light');
+            } else {
+                root.classList.add('light');
+                root.classList.remove('dark');
+            }
+            const iconEl = document.getElementById('theme-icon');
+            if (iconEl) {
+                iconEl.setAttribute('data-lucide', dark ? 'sun' : 'moon');
+                lucide.createIcons();
+            }
+        }
+
+        // ==========================================
+        // ШЕРІНГ ТА КОПІЮВАННЯ СПИСКУ
+        // ==========================================
+        function shareShoppingList() {
+            if (items.length === 0) {
+                showToast('Список порожній!', 'ℹ️');
+                return;
+            }
+
+            const toBuy = items.filter(i => !i.bought);
+            const bought = items.filter(i => i.bought);
+
+            let text = '🛒 *Мій список покупок:*\n\n';
+
+            if (toBuy.length > 0) {
+                text += '📌 *Треба купити:*\n';
+                toBuy.forEach(item => {
+                    const cat = CATEGORIES[item.category] || CATEGORIES.other;
+                    text += `▫️ ${item.name} — ${item.qty} ${item.unit} (${cat.icon})\n`;
+                });
+            }
+
+            if (bought.length > 0) {
+                text += '\n✅ *Вже у кошику:*\n';
+                bought.forEach(item => {
+                    text += `▪️ ~${item.name}~ (${item.qty} ${item.unit})\n`;
+                });
+            }
+
+            // Копіювання в буфер обміну (сумісне з iFrame)
+            const textarea = document.createElement('textarea');
+            textarea.value = text.replace(/\*/g, '').replace(/~/g, '');
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+            } catch (err) {}
+            document.body.removeChild(textarea);
+
+            triggerHaptic('success');
+
+            // Якщо відкрито всередині Telegram, пропонуємо також надіслати в чат
+            if (tg && tg.initDataUnsafe && Object.keys(tg.initDataUnsafe).length > 0) {
+                const shareUrl = `https://t.me/share/url?url=${encodeURIComponent('https://t.me')}&text=${encodeURIComponent(text)}`;
+                tg.openTelegramLink(shareUrl);
+            } else {
+                showToast('Список скопійовано в буфер обміну!', '📋');
+            }
+        }
+
+        // ==========================================
+        // РЕНДЕРИНГ ІНТЕРФЕЙСУ
+        // ==========================================
+        function renderApp() {
+            renderProgressAndCounts();
+            renderFilterTabs();
+            renderCategoryChips();
+            renderShoppingList();
+            lucide.createIcons();
+        }
+
+        function renderProgressAndCounts() {
+            const total = items.length;
+            const boughtCount = items.filter(i => i.bought).length;
+            const activeCount = total - boughtCount;
+            const percent = total > 0 ? Math.round((boughtCount / total) * 100) : 0;
+
+            document.getElementById('progress-text').textContent = `Куплено ${boughtCount} з ${total}`;
+            document.getElementById('progress-percent').textContent = `${percent}%`;
+            document.getElementById('progress-bar').style.width = `${percent}%`;
+
+            document.getElementById('count-all').textContent = total;
+            document.getElementById('count-active').textContent = activeCount;
+            document.getElementById('count-bought').textContent = boughtCount;
+
+            const clearBoughtBtn = document.getElementById('clear-bought-btn');
+            clearBoughtBtn.disabled = boughtCount === 0;
+
+            // Кнопка групування
+            const groupBtn = document.getElementById('group-toggle-btn');
+            if (isGroupedByCategory) {
+                groupBtn.className = 'p-2 rounded-xl bg-blue-600/15 text-blue-600 dark:text-blue-400 active:scale-95 transition';
+            } else {
+                groupBtn.className = 'p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 active:scale-95 transition';
+            }
+        }
+
+        function renderFilterTabs() {
+            const tabs = ['all', 'active', 'bought'];
+            tabs.forEach(tab => {
+                const el = document.getElementById(`tab-${tab}`);
+                if (statusFilter === tab) {
+                    el.className = 'py-1.5 rounded-lg transition text-center bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs';
+                } else {
+                    el.className = 'py-1.5 rounded-lg transition text-center text-slate-600 dark:text-slate-400 hover:text-slate-900';
+                }
+            });
+        }
+
+        function renderCategoryChips() {
+            const container = document.getElementById('category-chips');
+            const allActive = categoryFilter === 'all';
+
+            let html = `
+                <button 
+                    onclick="setCategoryFilter('all')" 
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition ${
+                        allActive 
+                            ? 'bg-blue-600 text-white shadow-xs' 
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700'
+                    }"
+                >
+                    Усі категорії
+                </button>
+            `;
+
+            Object.values(CATEGORIES).forEach(cat => {
+                const count = items.filter(i => i.category === cat.id).length;
+                if (count === 0 && categoryFilter !== cat.id) return; // Ховаємо порожні чіпси, щоб не захаращувати
+
+                const isActive = categoryFilter === cat.id;
+                html += `
+                    <button 
+                        onclick="setCategoryFilter('${cat.id}')" 
+                        class="px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 flex items-center gap-1.5 transition ${
+                            isActive 
+                                ? 'bg-blue-600 text-white shadow-xs' 
+                                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700'
+                        }"
+                    >
+                        <span>${cat.icon}</span>
+                        <span>${cat.name}</span>
+                        <span class="text-[10px] opacity-75">(${count})</span>
+                    </button>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function renderShoppingList() {
+            const container = document.getElementById('shopping-list-container');
+
+            // Фільтруємо список
+            const filtered = items.filter(item => {
+                if (statusFilter === 'active' && item.bought) return false;
+                if (statusFilter === 'bought' && !item.bought) return false;
+                if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white dark:bg-slate-800/70 rounded-3xl p-8 text-center border border-dashed border-slate-200 dark:border-slate-700 my-4">
+                        <div class="text-4xl mb-2">🛍️</div>
+                        <h3 class="text-sm font-bold mb-1">Список порожній</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Додайте новий товар зверху або скористайтеся готовими швидкими наборами.</p>
+                        <button onclick="openPresetsModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600/10 text-blue-600 dark:text-blue-400 hover:bg-blue-600/20 transition">
+                            ⚡ Відкрити швидкі набори
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            if (isGroupedByCategory && categoryFilter === 'all') {
+                // Групуємо за категоріями
+                let html = '';
+                Object.values(CATEGORIES).forEach(cat => {
+                    const catItems = filtered.filter(i => i.category === cat.id);
+                    if (catItems.length === 0) return;
+
+                    // Сортуємо: некуплені зверху, куплені знизу
+                    catItems.sort((a, b) => Number(a.bought) - Number(b.bought));
+
+                    html += `
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between px-1">
+                                <div class="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
+                                    <span>${cat.icon}</span>
+                                    <span>${cat.name}</span>
+                                </div>
+                                <span class="text-[11px] font-medium text-slate-400">${catItems.length} поз.</span>
+                            </div>
+                            <div class="space-y-1.5">
+                                ${catItems.map(item => createItemCardHTML(item, false)).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } else {
+                // Плоский список
+                const sorted = [...filtered].sort((a, b) => Number(a.bought) - Number(b.bought));
+                container.innerHTML = `
+                    <div class="space-y-1.5">
+                        ${sorted.map(item => createItemCardHTML(item, true)).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        function createItemCardHTML(item, showCategoryBadge) {
+            const cat = CATEGORIES[item.category] || CATEGORIES.other;
+            return `
+                <div 
+                    onclick="toggleItemBought('${item.id}')"
+                    class="item-enter group flex items-center justify-between gap-2.5 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700/70 shadow-2xs hover:border-blue-500/40 cursor-pointer transition-all ${
+                        item.bought ? 'opacity-60 bg-slate-50/70 dark:bg-slate-800/40' : ''
+                    }"
+                >
+                    <!-- Ліва частина: Чекбокс + Назва -->
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                        <div class="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                            item.bought 
+                                ? 'bg-emerald-500 text-white' 
+                                : 'border-2 border-slate-300 dark:border-slate-600 group-hover:border-blue-500'
+                        }">
+                            ${item.bought ? '<i data-lucide="check" class="w-3.5 h-3.5 stroke-[3]"></i>' : ''}
+                        </div>
+
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm font-medium truncate strike-anim ${item.bought ? 'strike-active text-slate-400 dark:text-slate-500' : ''}">
+                                ${escapeHTML(item.name)}
+                            </div>
+                            ${showCategoryBadge ? `
+                                <div class="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 mt-0.5">
+                                    <span>${cat.icon}</span>
+                                    <span>${cat.name}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Права частина: Кількість + Дії -->
+                    <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+                        <!-- Швидка зміна кількості -->
+                        <div class="flex items-center bg-slate-100 dark:bg-slate-900/90 rounded-xl p-0.5">
+                            <button 
+                                onclick="changeItemQty('${item.id}', -1, event)" 
+                                class="w-6 h-6 flex items-center justify-center rounded-lg text-slate-500 hover:bg-white dark:hover:bg-slate-800 active:scale-90 transition"
+                                title="Зменшити"
+                            >
+                                <i data-lucide="minus" class="w-3 h-3"></i>
+                            </button>
+                            <span class="px-1.5 text-xs font-bold min-w-[42px] text-center">
+                                ${item.qty} <span class="font-normal text-[11px] text-slate-500">${item.unit}</span>
+                            </span>
+                            <button 
+                                onclick="changeItemQty('${item.id}', 1, event)" 
+                                class="w-6 h-6 flex items-center justify-center rounded-lg text-slate-500 hover:bg-white dark:hover:bg-slate-800 active:scale-90 transition"
+                                title="Збільшити"
+                            >
+                                <i data-lucide="plus" class="w-3 h-3"></i>
+                            </button>
+                        </div>
+
+                        <!-- Кнопка редагування -->
+                        <button 
+                            onclick="openEditModal('${item.id}', event)" 
+                            class="p-1.5 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 active:scale-90 transition"
+                            title="Редагувати"
+                        >
+                            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                        </button>
+
+                        <!-- Кнопка видалення -->
+                        <button 
+                            onclick="deleteItem('${item.id}', event)" 
+                            class="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-700 active:scale-90 transition"
+                            title="Видалити"
+                        >
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==========================================
+        // ДОПОМІЖНІ ФУНКЦІЇ
+        // ==========================================
+        let toastTimeout = null;
+        function showToast(message, icon = '✅') {
+            const container = document.getElementById('toast-container');
+            document.getElementById('toast-message').textContent = message;
+            document.getElementById('toast-icon').textContent = icon;
+
+            container.classList.remove('opacity-0', '-translate-y-2');
+            container.classList.add('opacity-100', 'translate-y-0');
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                container.classList.add('opacity-0', '-translate-y-2');
+                container.classList.remove('opacity-100', 'translate-y-0');
+            }, 2200);
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                "'": '&#39;',
+                '"': '&quot;'
+            }[tag] || tag));
+        }
+    </script>
+</body>
+</html>
